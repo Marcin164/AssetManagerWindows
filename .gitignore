@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# CMake / MSBuild
+agent-cpp/build/
+agent-cpp/out/
+
+# Inno Setup
+installer/Output/
+installer/baked/   # baked deployment config (plaintext token) -- never commit

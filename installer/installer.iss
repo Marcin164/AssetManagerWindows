@@ -18,6 +18,7 @@ AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 DefaultDirName={autopf}\LanVentory\agent
+DefaultGroupName=LanVentory Agent
 DisableProgramGroupPage=yes
 DisableDirPage=yes
 UninstallDisplayIcon={app}\{#MyAppExeName}
@@ -40,6 +41,23 @@ Name: "{commonappdata}\LanVentory\agent"; \
 [Files]
 Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; \
     Flags: ignoreversion restartreplace uninsrestartdelete
+
+[Icons]
+; Start Menu folder gives the operator something visible after install.
+; The agent runs headless via Task Scheduler -- these shortcuts are just
+; for operators to inspect state and uninstall cleanly.
+Name: "{group}\View agent log"; \
+    Filename: "{win}\system32\notepad.exe"; \
+    Parameters: """{commonappdata}\LanVentory\agent\agent.log"""; \
+    IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\Open agent data folder"; \
+    Filename: "{commonappdata}\LanVentory\agent"; \
+    IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\Run a scan now"; \
+    Filename: "schtasks.exe"; Parameters: "/Run /TN LanVentoryAgent"; \
+    IconFilename: "{app}\{#MyAppExeName}"
+Name: "{group}\Uninstall LanVentory Agent"; \
+    Filename: "{uninstallexe}"
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Parameters: "--register-task --interval 60"; \
@@ -105,6 +123,24 @@ begin
     Token      := GetCmdParam('TOKEN');
     if (BackendUrl <> '') and (Token <> '') and (not FileExists(ConfigPath)) then begin
       WriteCliConfig(BackendUrl, Token);
+    end;
+  end;
+
+  // After everything's wired up: if there's still no config (user
+  // double-clicked .exe without /BACKENDURL= /TOKEN=), tell them where
+  // to get those values. The agent is installed and scheduled but
+  // cannot do anything useful until config.json exists.
+  if CurStep = ssDone then begin
+    if not FileExists(ConfigPath) then begin
+      MsgBox(
+        'LanVentory Agent installed -- but NOT YET configured.' + #13#10 + #13#10 +
+        'To finish setup:' + #13#10 +
+        '  1. Open your LanVentory web UI' + #13#10 +
+        '  2. Go to Settings -> Windows Agent' + #13#10 +
+        '  3. Copy the PowerShell snippet shown there' + #13#10 +
+        '  4. Run it on this host in an elevated PowerShell' + #13#10 + #13#10 +
+        'The agent will then enroll automatically and start sending scans.',
+        mbInformation, MB_OK);
     end;
   end;
 end;
