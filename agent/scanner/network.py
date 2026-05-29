@@ -60,6 +60,32 @@ Get-NetFirewallRule -ErrorAction SilentlyContinue |
   }
 """
 
+_MAPPED_DRIVES_PS = r"""
+Get-WmiObject -Class Win32_MappedLogicalDisk -ErrorAction SilentlyContinue |
+  ForEach-Object {
+    [pscustomobject]@{
+      DriveLetter  = $_.Name
+      RemotePath   = $_.ProviderName
+      FileSystem   = $_.FileSystem
+      SizeGB       = if ($_.Size)     { [math]::Round($_.Size     / 1GB, 2) } else { $null }
+      FreeGB       = if ($_.FreeSpace){ [math]::Round($_.FreeSpace/ 1GB, 2) } else { $null }
+    }
+  }
+"""
+
+_SHARES_PS = r"""
+Get-SmbShare -ErrorAction SilentlyContinue |
+  Where-Object { $_.Special -eq $false } |
+  ForEach-Object {
+    [pscustomobject]@{
+      Name         = $_.Name
+      Path         = $_.Path
+      Description  = $_.Description
+      CurrentUsers = $_.CurrentUsers
+    }
+  }
+"""
+
 
 def _collect_adapters() -> dict[str, list[dict[str, Any]]]:
     out: dict[str, list[dict[str, Any]]] = {}
@@ -69,6 +95,23 @@ def _collect_adapters() -> dict[str, list[dict[str, Any]]]:
             "netmask": a.netmask, "broadcast": a.broadcast, "ptp": a.ptp,
         } for a in addrs]
     return out
+
+
+def _collect_net_stats() -> dict[str, dict[str, Any]]:
+    counters = psutil.net_io_counters(pernic=True)
+    return {
+        nic: {
+            "bytes_sent":    c.bytes_sent,
+            "bytes_recv":    c.bytes_recv,
+            "packets_sent":  c.packets_sent,
+            "packets_recv":  c.packets_recv,
+            "errin":         c.errin,
+            "errout":        c.errout,
+            "dropin":        c.dropin,
+            "dropout":       c.dropout,
+        }
+        for nic, c in counters.items()
+    }
 
 
 def _collect_connections() -> list[dict[str, Any]]:
@@ -96,4 +139,7 @@ def collect_network() -> dict[str, Any]:
         "adapters":       safe(_collect_adapters, {}),
         "connections":    safe(_collect_connections, []),
         "firewall_rules": as_list(safe(run_powershell, [], _FIREWALL_RULES_PS, timeout=120)),
+        "mapped_drives":  as_list(safe(run_powershell, [], _MAPPED_DRIVES_PS, timeout=30)),
+        "shares":         as_list(safe(run_powershell, [], _SHARES_PS, timeout=30)),
+        "net_stats":      safe(_collect_net_stats, {}),
     }
